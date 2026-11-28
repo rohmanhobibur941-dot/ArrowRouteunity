@@ -1,0 +1,67 @@
+name: Build signed release APK
+
+# Manual only. Needs the 5 keystore secrets (see README).
+on:
+  workflow_dispatch:
+    inputs:
+      admob:
+        description: 'Also add the AdMob plugin to this build'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Android APK (release keystore)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: true
+
+      - name: Add the AdMob plugin (optional)
+        if: ${{ github.event.inputs.admob == 'true' }}
+        run: python3 .github/scripts/enable_admob.py
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Android-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Android-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          unityVersion: auto
+          buildMethod: ArrowRoute.EditorTools.BuildScript.BuildAndroid
+          buildName: ArrowRoute
+          androidExportType: androidPackage
+          androidVersionCode: ${{ github.run_number }}
+          versioning: None
+          androidKeystoreName: ${{ secrets.ANDROID_KEYSTORE_NAME }}
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+          customParameters: -buildTarget Android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ArrowRoute-release-apk
+          path: build/Android/*.apk
+          if-no-files-found: error
